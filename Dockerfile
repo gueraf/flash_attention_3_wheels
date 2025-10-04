@@ -5,6 +5,7 @@ ARG BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04
 FROM ${BASE_IMAGE} AS builder
 ARG PYTHON_VERSION=3.12
 ARG TORCH_VERSION=2.8.0
+ARG NINJA_JOBS=2
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y python3-psutil git python${PYTHON_VERSION}-dev ninja-build build-essential && rm -rf /var/lib/apt/lists/*
@@ -29,9 +30,11 @@ RUN uv pip install torch==${TORCH_VERSION}
 # Install numpy to avoid warnings
 RUN uv pip install numpy
 
-# Build the wheel
-RUN export NINJAFLAGS="-j$(nproc)" \
-    && echo "Using NINJAFLAGS=$NINJAFLAGS" \
+# Build the wheel (configurable parallelism)
+# If NINJA_JOBS is unset or empty, default to number of processors
+RUN if [ -z "$NINJA_JOBS" ]; then NINJA_JOBS=$(nproc); fi \
+    && export NINJAFLAGS="-j${NINJA_JOBS}" \
+    && echo "Using NINJAFLAGS=$NINJAFLAGS (NINJA_JOBS=${NINJA_JOBS})" \
     && uv build --no-build-isolation --verbose --wheel
 
 # Move wheel to dist root
