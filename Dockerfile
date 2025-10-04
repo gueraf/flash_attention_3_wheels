@@ -20,8 +20,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Copy the repository
 COPY . /workspace
 
-# Change to flash-attention directory
-WORKDIR /workspace/flash-attention
+# Change to flash-attention hopper directory for Flash Attention 3
+WORKDIR /workspace/flash-attention/hopper
 
 # Install torch
 RUN uv pip install torch==${TORCH_VERSION}
@@ -45,7 +45,7 @@ RUN [ $(stat -c%s dist/*.whl) -gt 10000000 ] || (echo "Wheel too small ($(stat -
 FROM ${BASE_IMAGE}
 
 # Copy the built wheel from the builder stage
-COPY --from=builder /workspace/flash-attention/dist/*.whl /wheels/
+COPY --from=builder /workspace/flash-attention/hopper/dist/*.whl /wheels/
 
 # List copied wheel
 RUN ls -lh /wheels/

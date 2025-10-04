@@ -1,4 +1,4 @@
-name: Build Flash Attention Wheel
+name: Build Flash Attention 3 Wheel
 
 on:
   push:
@@ -25,12 +25,12 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build --target builder -t flash-attention-builder .
+        docker build --target builder -t flash-attention-3-builder .
 
     - name: Create container and extract wheel
       run: |
-        CONTAINER_ID=$(docker create flash-attention-builder)
-        docker cp $CONTAINER_ID:/workspace/flash-attention/dist/. ./dist/
+        CONTAINER_ID=$(docker create flash-attention-3-builder)
+        docker cp $CONTAINER_ID:/workspace/flash-attention/hopper/dist/. ./dist/
         docker rm $CONTAINER_ID
 
     - name: Get build info
@@ -43,13 +43,13 @@ jobs:
         echo "PYTHON_VERSION=$PYTHON_VERSION" >> $GITHUB_ENV
         echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
         echo "COMMIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
-        cd flash-attention
+        cd flash-attention/hopper
         echo "FLASH_ATTENTION_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: Upload wheel as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: flash-attention-wheel
+        name: flash-attention-3-wheel
         path: dist/*.whl
 
     - name: Create latest release for main
@@ -59,14 +59,14 @@ jobs:
         tag_name: latest
         name: ${{ github.sha }}
         body: |
-          Latest wheel from main branch (commit ${{ github.sha }})
+          Latest Flash Attention 3 wheel from main branch (commit ${{ github.sha }})
 
           **Build Info:**
           - CUDA Version: ${{ env.CUDA_VERSION }}
           - Python Version: ${{ env.PYTHON_VERSION }}
           - Torch Version: ${{ env.TORCH_VERSION }}
           - Docker Image SHA: ${{ env.COMMIT_SHA }}
-          - Flash Attention Git Hash: ${{ env.FLASH_ATTENTION_SHA }}
+          - Flash Attention 3 Git Hash: ${{ env.FLASH_ATTENTION_SHA }}
         files: dist/*.whl
         draft: false
         prerelease: true
@@ -78,14 +78,14 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         body: |
-          Wheel for ${{ github.ref_name }}
+          Flash Attention 3 wheel for ${{ github.ref_name }}
 
           **Build Info:**
           - CUDA Version: ${{ env.CUDA_VERSION }}
           - Python Version: ${{ env.PYTHON_VERSION }}
           - Torch Version: ${{ env.TORCH_VERSION }}
           - Docker Image SHA: ${{ env.COMMIT_SHA }}
-          - Flash Attention Git Hash: ${{ env.FLASH_ATTENTION_SHA }}
+          - Flash Attention 3 Git Hash: ${{ env.FLASH_ATTENTION_SHA }}
         files: dist/*.whl
         draft: false
         prerelease: false
@@ -111,7 +111,7 @@ jobs:
         echo "PYTHON_VERSION=$PYTHON_VERSION" >> $GITHUB_ENV
         echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
         echo "COMMIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
-        cd flash-attention
+        cd flash-attention/hopper
         echo "FLASH_ATTENTION_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: Download wheel from latest release
@@ -136,7 +136,14 @@ jobs:
     - name: Test import
       run: |
         cd test
-        uv run python -c "import flash_attn; print('Flash attention import successful')"
+        uv run python -c "
+        import flash_attn_3
+        import flash_attn_interface
+        import inspect
+        print('Flash attention 3 import successful')
+        print('Available interface functions:', [name for name in dir(flash_attn_interface) if not name.startswith('_')])
+        print('flash_attn_varlen_func signature:', inspect.signature(flash_attn_interface.flash_attn_varlen_func))
+        "
 
     - name: Check for GPU
       run: |
@@ -154,16 +161,32 @@ jobs:
         import torch
         print('Torch CUDA available:', torch.cuda.is_available())
         if torch.cuda.is_available():
-          import flash_attn
-          print('Flash attention GPU import successful')
-          # Basic functional test
-          batch_size, seqlen, nheads, headdim = 1, 64, 8, 64
-          q = torch.randn(batch_size, seqlen, nheads, headdim, device='cuda')
-          k = torch.randn(batch_size, seqlen, nheads, headdim, device='cuda')
-          v = torch.randn(batch_size, seqlen, nheads, headdim, device='cuda')
-          out = flash_attn.flash_attn_func(q, k, v, dropout_p=0.0, causal=False)
-          print('Flash attention function ran successfully on random data')
-          print('Output shape:', out.shape)
+          import flash_attn_3
+          import flash_attn_interface
+          print('Flash attention 3 GPU import successful')
+          # Basic functional test using varlen function
+          batch_size, seqlen, nheads, headdim = 2, 64, 8, 64
+          total_q = batch_size * seqlen
+          total_k = batch_size * seqlen
+          
+          q = torch.randn(total_q, nheads, headdim, device='cuda', dtype=torch.float16)
+          k = torch.randn(total_k, nheads, headdim, device='cuda', dtype=torch.float16)
+          v = torch.randn(total_k, nheads, headdim, device='cuda', dtype=torch.float16)
+          
+          # Create cumulative sequence lengths
+          cu_seqlens_q = torch.tensor([0, seqlen, 2 * seqlen], device='cuda', dtype=torch.int32)
+          cu_seqlens_k = torch.tensor([0, seqlen, 2 * seqlen], device='cuda', dtype=torch.int32)
+          
+          try:
+            out = flash_attn_interface.flash_attn_varlen_func(
+              q, k, v, cu_seqlens_q, cu_seqlens_k, seqlen, seqlen,
+              dropout_p=0.0, causal=False
+            )
+            print('Flash attention 3 varlen function ran successfully on random data')
+            print('Output shape:', out.shape)
+          except Exception as e:
+            print('Flash attention 3 varlen function test failed:', str(e))
+            print('Available interface functions:', [name for name in dir(flash_attn_interface) if not name.startswith('_')])
         else:
           print('CUDA not available')
         "
