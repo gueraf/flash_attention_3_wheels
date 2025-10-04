@@ -30,7 +30,9 @@ RUN uv pip install torch==${TORCH_VERSION}
 RUN uv pip install numpy
 
 # Build the wheel
-RUN NINJAFLAGS="-j$(nproc)" uv build --no-build-isolation --verbose --wheel
+RUN export NINJAFLAGS="-j$(nproc)" \
+    && echo "Using NINJAFLAGS=$NINJAFLAGS" \
+    && uv build --no-build-isolation --verbose --wheel
 
 # Move wheel to dist root
 RUN mv dist/*/*.whl dist/ 2>/dev/null || true
