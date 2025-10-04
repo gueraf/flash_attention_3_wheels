@@ -7,7 +7,7 @@ ARG PYTHON_VERSION=3.12
 ARG TORCH_VERSION=2.8.0
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y python3-psutil && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3-psutil git python${PYTHON_VERSION}-dev ninja-build build-essential && rm -rf /var/lib/apt/lists/*
 
 # Copy uv from official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -26,8 +26,11 @@ WORKDIR /workspace/flash-attention/hopper
 # Install torch
 RUN uv pip install torch==${TORCH_VERSION}
 
+# Install numpy to avoid warnings
+RUN uv pip install numpy
+
 # Build the wheel
-RUN uv build --no-build-isolation --verbose --wheel
+RUN NINJAFLAGS="-j$(nproc)" uv build --no-build-isolation --verbose --wheel
 
 # Move wheel to dist root
 RUN mv dist/*/*.whl dist/ 2>/dev/null || true
