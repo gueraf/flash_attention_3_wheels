@@ -2,10 +2,10 @@ name: Build Flash Attention 3 Wheel
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
     tags: [ '*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   build:
@@ -53,7 +53,7 @@ jobs:
         path: dist/*.whl
 
     - name: Create latest release for main
-      if: github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
